@@ -8,6 +8,12 @@ instead of GLUT / OpenGL / FreeType, with a refreshed, more modern interface.
 It visualizes the filesystem starting from the working directory, or any
 directory passed as a command-line argument.
 
+<img width="1747" height="1205" alt="Screenshot 2026-06-08 at 13 39 38" src="https://github.com/user-attachments/assets/7903e163-4ea3-4b17-9771-89a167e8a7b6" />
+
+<img width="1747" height="1205" alt="Screenshot 2026-06-08 at 13 39 50" src="https://github.com/user-attachments/assets/d6857bea-d148-445c-ba43-7555e1f43b4c" />
+
+
+
 ## What it does
 
 fsnav now shows **one directory at a time** as a grid of boxes — directories
