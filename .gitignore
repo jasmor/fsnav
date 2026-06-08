@@ -1,0 +1,10 @@
+# Compiled output
+/target
+
+# Backup / editor files
+**/*.rs.bk
+*~
+.DS_Store
+
+# Cargo lockfile is committed for binaries (reproducible builds), so it is NOT
+# ignored here. (If this were a library, you'd typically ignore Cargo.lock.)

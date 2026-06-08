@@ -1,0 +1,25 @@
+[package]
+name = "fsnav"
+version = "0.1.0"
+edition = "2021"
+authors = ["Rust port of fsnav by John Tsiombikas"]
+description = "3D filesystem navigator inspired by SGI fsn"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+macroquad = { version = "0.4", features = ["audio"] }
+# Cross-platform "send to OS trash/recycle bin" so deletes are never a raw unlink.
+trash = "5"
+# Pure-Rust audio decoding so we can play formats macroquad's bundled backend
+# can't (mp3, m4a/aac, flac, ...). We decode to PCM ourselves, then hand a plain
+# WAV to macroquad. mp3 + isomp4 + aac are not royalty-free so must be opted in.
+# Pinned to 0.5: its API is stable and well-documented; 0.6 reorganized modules.
+symphonia = { version = "0.5", features = ["mp3", "isomp4", "aac", "alac", "flac", "vorbis", "wav", "ogg"] }
+# Pure-Rust image decoding so we can preview formats macroquad's bundled decoder
+# panics on (JPEG, GIF, BMP, ...). We decode to RGBA ourselves and upload via
+# Texture2D::from_rgba8, which never does format detection.
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "gif", "bmp"] }
+
+[profile.release]
+opt-level = 3
+lto = true
