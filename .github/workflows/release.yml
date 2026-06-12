@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # needed to create the Release and upload assets
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: fsnav-linux
+            bin: fsnav
+          - os: macos-latest
+            artifact: fsnav-macos
+            bin: fsnav
+          - os: windows-latest
+            artifact: fsnav-windows.exe
+            bin: fsnav.exe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libx11-dev libxi-dev libgl1-mesa-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release --verbose
+
+      - name: Rename binary for release
+        shell: bash
+        run: |
+          mkdir -p dist
+          cp "target/release/${{ matrix.bin }}" "dist/${{ matrix.artifact }}"
+
+      - name: Upload to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.artifact }}
