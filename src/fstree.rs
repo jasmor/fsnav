@@ -295,7 +295,11 @@ impl Tree {
     }
 
     /// Reorder `all_children` according to the active sort mode.
-    fn sort_children(&mut self) {
+    /// Sort `all_children` by the current mode. Returns true if the order
+    /// actually changed (so callers can avoid needless page rebuilds, which
+    /// would otherwise clear the selection every frame in size-sort).
+    fn sort_children(&mut self) -> bool {
+        let before = self.all_children.clone();
         // Snapshot the maps to avoid borrowing self inside the closure.
         let sort = self.sort;
         let sizes = &self.sizes;
@@ -335,6 +339,7 @@ impl Tree {
                 }
             }
         });
+        self.all_children != before
     }
 
     /// Change the sort mode, re-sort, and reset to the first page.
@@ -363,14 +368,17 @@ impl Tree {
     pub fn resort_if_size(&mut self) {
         if self.sort == SortMode::Size {
             let saved = self.page_start;
-            self.sort_children();
-            // Keep the page offset if still valid, else clamp to the last page.
-            self.page_start = if saved < self.all_children.len() {
-                saved
-            } else {
-                0
-            };
-            self.rebuild_page();
+            // Only rebuild the page if the order actually changed — otherwise we
+            // would clear the selection every frame, making clicks impossible
+            // once sizes have settled.
+            if self.sort_children() {
+                self.page_start = if saved < self.all_children.len() {
+                    saved
+                } else {
+                    0
+                };
+                self.rebuild_page();
+            }
         }
     }
 
