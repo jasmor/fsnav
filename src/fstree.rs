@@ -164,6 +164,11 @@ pub struct Tree {
     /// Active sort order. Cycle with the `s` key.
     pub sort: SortMode,
 
+    /// Horizontal spread multiplier for the box field. 1.0 = compact grid view;
+    /// fsn/island mode sets this higher to spread boxes into a wide field you
+    /// fly across. Applied in `layout`.
+    pub spread: f32,
+
     /// Full, sorted child list for the current dir (paths only). `nodes` is a
     /// capped window into this; paging advances `page_start`.
     all_children: Vec<PathBuf>,
@@ -195,6 +200,7 @@ impl Tree {
             selection: None,
             scan_error: None,
             sort: SortMode::Name,
+            spread: 1.0,
             all_children: Vec::new(),
             page_start: 0,
             sizes: std::collections::HashMap::new(),
@@ -521,11 +527,17 @@ impl Tree {
         }
         let p = self.params;
 
-        let cols = (n as f32).sqrt().ceil() as usize;
-        let cols = cols.max(1);
+        // Wider-than-deep field in spread (fsn) mode so it reads as a field you
+        // fly across; near-square in compact grid mode.
+        let cols = if self.spread > 1.01 {
+            // ~1.6x as many columns as rows.
+            (((n as f32) * 1.6).sqrt().ceil() as usize).max(1)
+        } else {
+            ((n as f32).sqrt().ceil() as usize).max(1)
+        };
         let rows = (n + cols - 1) / cols;
 
-        let cell = p.dir_size.max(p.file_size) + p.dir_spacing;
+        let cell = (p.dir_size.max(p.file_size) + p.dir_spacing) * self.spread;
         let grid_w = cols as f32 * cell;
         let grid_d = rows as f32 * cell;
         let x0 = -grid_w / 2.0 + cell / 2.0;
@@ -559,9 +571,13 @@ impl Tree {
             return;
         }
         let p = self.params;
-        let cols = ((n as f32).sqrt().ceil() as usize).max(1);
+        let cols = if self.spread > 1.01 {
+            (((n as f32) * 1.6).sqrt().ceil() as usize).max(1)
+        } else {
+            ((n as f32).sqrt().ceil() as usize).max(1)
+        };
         let rows = (n + cols - 1) / cols;
-        let cell = p.dir_size.max(p.file_size) + p.dir_spacing;
+        let cell = (p.dir_size.max(p.file_size) + p.dir_spacing) * self.spread;
         let grid_w = cols as f32 * cell;
         let grid_d = rows as f32 * cell;
         let x0 = -grid_w / 2.0 + cell / 2.0;

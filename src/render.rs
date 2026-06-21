@@ -110,6 +110,48 @@ pub fn draw_env() {
     }
 }
 
+/// Draw a height-independent selection cue for a box in fsn field mode: a
+/// glowing ring on the ground at the box's footprint, plus a bright wire
+/// outline around the box itself. Unlike a top-of-box beam (which floats up by
+/// the HUD on tall disk-usage spikes), this reads as "selected" at any height —
+/// the ring says *where* on the field, the outline says *which* box.
+pub fn draw_spotlight(center: Vec3, half: Vec3) {
+    let base_y = center.y - half.y + 0.02; // just above the ground footprint
+    let r = half.x.max(0.2);
+
+    // Glowing ground ring: a few concentric square outlines at the base, so the
+    // selected item's footprint lights up on the field.
+    for (k, ring_r) in [r * 1.6, r * 2.1, r * 2.7].iter().enumerate() {
+        let a = 0.55 - k as f32 * 0.15;
+        draw_ground_square(center.x, center.z, base_y, *ring_r, Color::new(1.0, 0.95, 0.6, a));
+    }
+    // A soft filled glow disc (thin slab) right on the footprint.
+    draw_cube(
+        vec3(center.x, base_y, center.z),
+        vec3(r * 3.0, 0.012, r * 3.0),
+        None,
+        Color::new(1.0, 0.95, 0.6, 0.10),
+    );
+
+    // Bright outline around the actual box so the selected item pops at any
+    // height — this is the "which box" cue.
+    draw_cube_wires(center, half * 2.0 + vec3(0.04, 0.04, 0.04), Color::new(1.0, 0.97, 0.7, 0.95));
+}
+
+/// Draw a square outline lying flat on the ground (XZ plane) at height `y`,
+/// centered at (cx, cz) with half-extent `half`.
+fn draw_ground_square(cx: f32, cz: f32, y: f32, half: f32, color: Color) {
+    let corners = [
+        vec3(cx - half, y, cz - half),
+        vec3(cx + half, y, cz - half),
+        vec3(cx + half, y, cz + half),
+        vec3(cx - half, y, cz + half),
+    ];
+    for i in 0..4 {
+        draw_line_3d(corners[i], corners[(i + 1) % 4], color);
+    }
+}
+
 /// Draw a node as a shaded box. macroquad's `draw_cube` uses the cube's
 /// center, which matches our `vis_pos`.
 ///
@@ -362,6 +404,7 @@ pub fn draw_file_card(
     anchor: Vec2,
     viewpoint_label: &str,
     thumbnail: Option<&Texture2D>,
+    usage_active: bool,
 ) {
     let pad = 14.0;
     let line_h = 22.0;
@@ -416,7 +459,8 @@ pub fn draw_file_card(
     let size_str = match node.recursive_size {
         Some(b) if is_dir => format!("{} (total)", human_size(b)),
         Some(b) => human_size(b),
-        None if is_dir => "scanning... (disk-usage mode)".to_string(),
+        None if is_dir && usage_active => "scanning...".to_string(),
+        None if is_dir => "press c for disk-usage".to_string(),
         None => human_size(node.size),
     };
 

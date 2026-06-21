@@ -35,6 +35,8 @@ struct CameraState {
     dist: f32,
     from: Vec3,
     target: Vec3,
+    dist_from: f32, // dist at start of fly-to (for animated zoom)
+    dist_target: f32, // dist to ease toward during fly-to
     motion_start: f64, // time the current fly-to began
 }
 
@@ -46,6 +48,8 @@ impl CameraState {
             dist: 5.0,
             from: Vec3::ZERO,
             target: Vec3::ZERO,
+            dist_from: 5.0,
+            dist_target: 5.0,
             motion_start: -10.0,
         }
     }
@@ -58,8 +62,15 @@ impl CameraState {
         self.from.lerp(self.target, t)
     }
 
+    /// Eased distance for the in-progress fly-to (zoom toward/away).
+    fn cur_dist(&self, now: f64) -> f32 {
+        let t = (((now - self.motion_start) as f32) / TRANS_TIME).clamp(0.0, 1.0);
+        let t = t * t * (3.0 - 2.0 * t);
+        self.dist_from + (self.dist_target - self.dist_from) * t
+    }
+
     /// Eye position derived from orbit angles around the focus point.
-    fn eye(&self, focus: Vec3) -> Vec3 {
+    fn eye(&self, focus: Vec3, dist: f32) -> Vec3 {
         let phi = self.phi.to_radians();
         let theta = self.theta.to_radians();
         // Spherical orbit: phi is elevation, theta is azimuth.
@@ -68,7 +79,7 @@ impl CameraState {
             phi.sin(),
             phi.cos() * theta.cos(),
         );
-        focus + dir * self.dist
+        focus + dir * dist
     }
 }
 
@@ -187,6 +198,14 @@ async fn run() {
     } else {
         ColorMode::Access
     };
+    // Experimental fsn-style "platform world" view (toggle with 'm'). Stage 1:
+    // visual only — shows the current dir as a deck with subdirectory decks in a
+    // ring. Normal single-directory navigation still applies.
+    let mut platform_mode = false;
+    // Island mode (toggle 'm'): the current directory is shown as a single
+    // floating "island" (the deck + its boxes). Navigation is the normal grid
+    // interaction — double-click a folder to sail into its island — plus a brief
+    // fly-in transition on enter. No subdirectory ring (that proved cumbersome).
 
     let mut last_left_click = -10.0_f64;
     let mut last_click_pos = Vec2::ZERO;
@@ -283,10 +302,14 @@ async fn run() {
             if is_mouse_button_down(MouseButton::Right) {
                 let d = dt_mouse - prev_mouse;
                 cam.dist = (cam.dist + d.y * 0.05).max(0.5);
+                cam.dist_from = cam.dist;
+                cam.dist_target = cam.dist;
             }
             let (_, wheel_y) = mouse_wheel();
             if wheel_y != 0.0 {
                 cam.dist = (cam.dist - wheel_y.signum() * 0.5).max(0.5);
+                cam.dist_from = cam.dist;
+                cam.dist_target = cam.dist;
             }
 
             // double-click: enter a folder, page the "+N more" marker, or fly
@@ -305,7 +328,13 @@ async fn run() {
                                     ));
                                     pinned = None;
                                     media.stop();
-                                    reset_camera(&mut cam, now);
+                                    if platform_mode {
+                                        // Sail to the child island: swoop in from
+                                        // a height onto the new island.
+                                        island_fly_in(&mut cam, now);
+                                    } else {
+                                        reset_camera(&mut cam, now);
+                                    }
                                     if color_mode == ColorMode::Usage || tree.sort == SortMode::Size {
                                         usage_scan = Some(usage::UsageScan::start(&tree.cwd));
                                     }
@@ -348,6 +377,12 @@ async fn run() {
                 pinned = tree.selection;
                 if let Some(idx) = pinned {
                     tree.ensure_classified(idx);
+                    // In the spread-out fsn field, a single click flies the
+                    // camera across to the clicked box (double-click still
+                    // enters a folder). This is the "fly to a directory" feel.
+                    if platform_mode {
+                        fly_to(&mut cam, &tree, idx, now);
+                    }
                 }
             }
 
@@ -409,6 +444,41 @@ async fn run() {
                     usage_scan = Some(usage::UsageScan::start(&tree.cwd));
                 }
                 pinned = None;
+            }
+            // Toggle fsn field view (wide spread-out field, low camera).
+            if is_key_pressed(KeyCode::M) {
+                platform_mode = !platform_mode;
+                tree.spread = if platform_mode { 3.6 } else { 1.0 };
+                tree.layout();
+                if platform_mode {
+                    if color_mode == ColorMode::Usage {
+                        tree.layout_usage();
+                    }
+                    // Low camera looking across the field, like fsn.
+                    cam.phi = 14.0;
+                    cam.dist = 38.0;
+                    cam.dist_from = 38.0;
+                    cam.dist_target = 38.0;
+                    cam.from = cam.focus(now);
+                    cam.target = Vec3::ZERO;
+                    cam.motion_start = now;
+                } else {
+                    reset_camera(&mut cam, now);
+                    cam.phi = 25.0;
+                    cam.dist = 5.0;
+                    cam.dist_from = 5.0;
+                    cam.dist_target = 5.0;
+                }
+                set_toast(
+                    &mut toast,
+                    if platform_mode {
+                        "fsn field view".into()
+                    } else {
+                        "grid view".to_string()
+                    },
+                    false,
+                    now,
+                );
             }
             if is_key_pressed(KeyCode::V) && vp_agent.is_some() {
                 showing_agent = !showing_agent;
@@ -500,6 +570,9 @@ async fn run() {
             }
 
             // Open the hovered/pinned item in its default app ('o' or Enter).
+            // Enter on a focused platform descends into it (platform mode);
+            // otherwise 'o'/Enter opens the selected file or folder.
+            // Open the hovered/pinned item in its default app ('o' or Enter).
             if is_key_pressed(KeyCode::O) || is_key_pressed(KeyCode::Enter) {
                 if let Some(idx) = tree.selection.or(pinned) {
                     if matches!(tree.nodes[idx].kind, Kind::File | Kind::Dir) {
@@ -535,7 +608,14 @@ async fn run() {
 
         // ============ CAMERA / PROJECTION ============
         let focus = cam.focus(now);
-        let eye = cam.eye(focus);
+        let cur_dist = cam.cur_dist(now);
+        // Once the fly-to settles, commit the eased distance back to cam.dist so
+        // wheel/drag zoom continues from where the animation ended.
+        let settled = (now - cam.motion_start) as f32 >= TRANS_TIME;
+        if settled {
+            cam.dist = cam.dist_target;
+        }
+        let eye = cam.eye(focus, cur_dist);
         let camera = Camera3D {
             position: eye,
             target: focus,
@@ -632,6 +712,9 @@ async fn run() {
         draw_background();
 
         set_camera(&camera);
+        // Both modes now draw the ground plane + grid: fsn mode needs the floor
+        // and horizon as orientation anchors (a field floating in void is
+        // disorienting). The boxes sit above the floor so there's no z-fight.
         render::draw_env();
 
         let filtering = search_active && !query.is_empty();
@@ -657,6 +740,17 @@ async fn run() {
                         node.vis_size,
                         Color::new(0.3, 0.33, 0.4, 0.25),
                     );
+                }
+            }
+        }
+
+        // Spotlight beam on the clicked (pinned) box in fsn field mode — the
+        // fsn selection cue. Drawn after boxes so its translucency blends over.
+        if platform_mode {
+            if let Some(idx) = pinned {
+                if idx < tree.nodes.len() {
+                    let n = &tree.nodes[idx];
+                    render::draw_spotlight(n.vis_pos, n.vis_size);
                 }
             }
         }
@@ -712,6 +806,7 @@ async fn run() {
                     dt_mouse,
                     &pick_vp(&vp_me, &vp_agent, showing_agent).label,
                     thumb.as_ref(),
+                    color_mode == ColorMode::Usage || tree.sort == SortMode::Size,
                 );
             }
         }
@@ -807,6 +902,24 @@ fn pick_vp<'a>(
 fn fly_to(cam: &mut CameraState, tree: &Tree, idx: usize, now: f64) {
     cam.from = cam.focus(now);
     cam.target = tree.nodes[idx].vis_pos;
+    // Animate a zoom-in toward the clicked box so it flies to center and gets
+    // closer (rather than just re-centering at the same distance). Don't zoom
+    // closer than we already are.
+    cam.dist_from = cam.cur_dist(now);
+    cam.dist_target = cam.dist_from.min(14.0);
+    cam.motion_start = now;
+}
+
+/// Camera transition when entering a child folder in fsn mode: ease the look
+/// target from a forward offset so the camera sweeps across into the new field,
+/// then settles on the origin. Keeps the low fsn angle (phi/dist unchanged).
+fn island_fly_in(cam: &mut CameraState, now: f64) {
+    cam.from = cam.focus(now) + vec3(0.0, 3.0, 12.0);
+    cam.target = Vec3::ZERO;
+    let d = cam.cur_dist(now);
+    cam.dist = d;
+    cam.dist_from = d;
+    cam.dist_target = d;
     cam.motion_start = now;
 }
 
@@ -814,6 +927,11 @@ fn fly_to(cam: &mut CameraState, tree: &Tree, idx: usize, now: f64) {
 fn reset_camera(cam: &mut CameraState, now: f64) {
     cam.from = cam.focus(now);
     cam.target = Vec3::ZERO;
+    // Hold distance steady across the move (no zoom).
+    let d = cam.cur_dist(now);
+    cam.dist = d;
+    cam.dist_from = d;
+    cam.dist_target = d;
     cam.motion_start = now;
 }
 
@@ -958,7 +1076,7 @@ fn draw_hud(
         ),
         "drag orbit · wheel zoom · dbl-click open · click/space info".to_string(),
         "y copy · x cut · p paste · d trash · o open · / search".to_string(),
-        "c color-mode · s sort · i scan-all · backspace/b up".to_string(),
+        "c color-mode · s sort · m fsn-field · i scan-all · backspace/b up".to_string(),
     ];
     if has_agent {
         lines[3].push_str(" · v viewpoint");

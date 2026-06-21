@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/icon.png" alt="fsnav icon" width="140" height="140">
+</p>
+
 # fsnav (Rust port)
 
 A 3D filesystem navigator inspired by the early-90s **fsn** program on SGI
@@ -24,6 +28,24 @@ by double-clicking it and walk back up with Backspace. This keeps the program
 fast and stable even on directories with tens of thousands of entries (the old
 whole-tree version could exhaust memory or the stack there).
 
+## fsn field view
+
+Press **m** to switch into **fsn field view** — a wide, spread-out field of
+boxes on a grounded horizon, viewed from a low camera looking across it, in the
+spirit of the original SGI fsn and its *Jurassic Park* cameo. It's the same
+directory you were browsing, just laid out as a field you fly across rather than
+a compact grid.
+
+- **Single-click** any box to glide the camera over to it, zooming in as it
+  flies to screen-center.
+- A **spotlight cue** marks your selection: a glowing ring on the ground at the
+  box's footprint plus a bright outline around the box, so the selected item is
+  obvious whether it's a flat file or a tall disk-usage spike.
+- **Double-click a folder** to sail into it, with a brief fly-in transition onto
+  the new field.
+
+Press **m** again to return to the compact grid view.
+
 ## Controls
 
 Navigation
@@ -31,11 +53,10 @@ Navigation
 | --- | --- |
 | Drag (left mouse) | Orbit the camera |
 | Drag (right mouse) / wheel | Zoom in and out |
+| Single-click a box | Fly/zoom to it and pin its info card |
 | Double-click a folder | Open (descend into) it |
-| Double-click a file | Fly to it and pin its info card |
 | **Left** / **Right** arrows | Page through a large directory |
 | **Backspace** / **B** | Go back up one directory |
-| Click an item | Pin its info card |
 | Hold **Space** | Show info for whatever you're hovering |
 | **o** / **Enter** | Open the selected item in its default app |
 | **/** | Search the current directory; type to filter, **Enter** cycles |
@@ -44,6 +65,7 @@ Navigation
 Views
 | Key | Effect |
 | --- | --- |
+| **m** | Toggle **fsn field view** (wide spread-out field, fly-to navigation) |
 | **c** | Cycle color mode: *kind* → *access* → *disk usage* |
 | **s** | Cycle sort: *name* → *size* → *newest* |
 | **v** | Switch viewpoint (you ↔ `--agent`) in access mode |
@@ -104,7 +126,8 @@ change the tree re-scans so the view stays in sync.
 space hogs literally tower over everything else. Folder sizes are computed on a
 background thread and stream in without freezing the UI. Combine with size-sort
 (`s`) to put the biggest items on the first page — the fast answer to "what's
-eating my disk?".
+eating my disk?". This pairs especially well with **fsn field view** (`m`),
+where the tall spikes stand out across the field.
 
 **Sort.** Press `s` to cycle *name → size → newest*. Size-sort mixes files and
 folders together by total size (folders settle as they're measured); newest-sort
@@ -154,7 +177,8 @@ sudo apt install libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
 
 - `src/fstree.rs` — single-directory view model: scans one directory's
   immediate children, caps the visible set (~20) with "+N more" paging, tracks
-  a breadcrumb for back-navigation, and lays the boxes out in a grid.
+  a breadcrumb for back-navigation, and lays the boxes out in a grid (or a wide
+  spread-out field in fsn field view).
 - `src/access.rs` — effective-access analysis for a viewpoint (you or a named
   agent), including the risk flags, via Unix mode bits + ownership.
 - `src/filetype.rs` — content classification by magic bytes and entropy.
@@ -165,9 +189,13 @@ sudo apt install libx11-dev libxi-dev libgl1-mesa-dev libasound2-dev
 - `src/effects.rs` — particle bursts and flying-box tweens for operations.
 - `src/pick.rs` — ray/box intersection and mouse picking.
 - `src/render.rs` — palette, box/label drawing, info card (with image preview),
-  legend, toasts, search bar, and the confirmation dialog.
-- `src/main.rs` — window setup, camera, input handling, directory navigation,
-  the render loop, and the glue tying operations and media to the view.
+  the fsn field spotlight cue, legend, toasts, search bar, and the confirmation
+  dialog.
+- `src/main.rs` — window setup, camera (orbit, fly-to with eased zoom, fsn field
+  view), input handling, directory navigation, the render loop, and the glue
+  tying operations and media to the view.
+- `assets/` — application icon (`icon.svg` source, `icon.png` master, and a
+  generated `icons/` set including a Windows `.ico`).
 
 ## Safety notes
 
