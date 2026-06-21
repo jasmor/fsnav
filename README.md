@@ -18,6 +18,55 @@ directory passed as a command-line argument.
 
 
 
+## Download
+
+Prebuilt binaries for Linux, macOS, and Windows are attached to each
+[release](../../releases). Grab the one for your platform.
+
+The binaries are **not code-signed**, so macOS and Windows will warn you before
+running them the first time. This is expected for open-source tools without a
+paid signing certificate, the steps below let you run them anyway.
+
+### macOS
+
+You'll see *"'fsnav-macos' Not Opened — Apple could not verify..."*. **Don't
+click "Move to Trash."** Either of these works:
+
+- **Terminal (most reliable):** remove the download-quarantine flag, then run it:
+
+  ```sh
+  xattr -d com.apple.quarantine fsnav-macos
+  chmod +x fsnav-macos
+  ./fsnav-macos
+  ```
+
+- **System Settings:** try to open the app once (you'll get the warning), then
+  open **System Settings → Privacy & Security**, scroll to the Security section,
+  and click **Open Anyway** next to the note about `fsnav-macos`. Run it again
+  and confirm. (On some macOS versions you can instead right-click the binary in
+  Finder and choose **Open**, which offers an Open button the double-click path
+  doesn't.)
+
+You only need to do this once per download.
+
+### Windows
+
+You'll see a blue *"Windows protected your PC"* SmartScreen dialog. Click
+**More info**, then **Run anyway**. As with macOS, this is just the unsigned-app
+warning, and only appears the first time.
+
+### Linux
+
+```sh
+chmod +x fsnav-linux
+./fsnav-linux
+```
+
+If it won't start, install the usual X11/OpenGL/ALSA dev libraries (see
+[Build & run](#build--run)).
+
+
+
 ## What it does
 
 fsnav now shows **one directory at a time** as a grid of boxes — directories
