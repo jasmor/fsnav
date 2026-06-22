@@ -1,19 +1,15 @@
 name: Release
-
 on:
   push:
     tags:
       - "v*"
-
 permissions:
   contents: write   # needed to create the Release and upload assets
-
 env:
   CARGO_TERM_COLOR: always
-
 jobs:
   build:
-    name: Build (${{ matrix.os }})
+    name: Build (${{ matrix.artifact }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -28,7 +24,6 @@ jobs:
           - os: windows-latest
             artifact: fsnav-windows.exe
             bin: fsnav.exe
-
     steps:
       - uses: actions/checkout@v4
 
@@ -40,8 +35,21 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
 
-      - name: Build
+      - name: Build (Linux/Windows)
+        if: runner.os != 'macOS'
         run: cargo build --release --verbose
+
+      - name: Build universal macOS binary
+        if: runner.os == 'macOS'
+        run: |
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
+          cargo build --release --target aarch64-apple-darwin --verbose
+          cargo build --release --target x86_64-apple-darwin --verbose
+          mkdir -p target/release
+          lipo -create -output target/release/fsnav \
+            target/aarch64-apple-darwin/release/fsnav \
+            target/x86_64-apple-darwin/release/fsnav
+          lipo -info target/release/fsnav
 
       - name: Rename binary for release
         shell: bash
