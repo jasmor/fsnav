@@ -1,6 +1,6 @@
 [package]
 name = "fsnav"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Rust port of fsnav by John Tsiombikas"]
 description = "3D filesystem navigator inspired by SGI fsn"
